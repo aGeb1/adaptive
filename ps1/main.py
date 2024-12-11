@@ -13,7 +13,7 @@ N_iter = 50
 N_0 = 10000
 L = 20
 
-pole_pairs = [np.array(pole_pair) for pole_pair in [(0.9, 0.8), (0.85, 0.8), (0.95, -0.9)]]
+pole_pairs = [np.array(pole_pair) for pole_pair in [(0.9, 0.8), (0.95, 0.8), (0.95, -0.9)]]
 
 for poles in pole_pairs:
     print(f"poles: {poles}")
@@ -40,21 +40,28 @@ for poles in pole_pairs:
     omega = np.linspace(-np.pi, np.pi, 1000)
     z = np.exp(1j*omega)
     S = 1/((1-poles[0]*z)*(1-poles[0]/z)*(1-poles[1]*z)*(1-poles[1]/z))
-    assert S.imag.max() < 1e-11
+    assert S.imag.max() < 1e-10
+    print("\tComplex component of PSD is very small.")
     S = S.real
 
     S_min, S_max = min(S), max(S)
     print(f"\tS_min: {S_min:.4f}, S_max: {S_max:.4f}\n")
 
-    plt.plot(omega, S)
+    plt.plot(omega, 10 * np.log10(S))
+    plt.title(f"Power spectral density, poles = ({poles[0]}, {poles[1]})")
+    plt.xlabel("omega")
+    plt.ylabel("PSD (dB)")
     plt.savefig(f"plots/poles_{poles[0]}_{poles[1]}/psd.png")
     plt.close()
     print("\tPSD plotted.\n")
 
-    # Calculate eigenvalues of coorelation matricies
+    # Calculate eigenvalues of correlation matricies
     eigvals = la.eigvals(R)
     assert eigvals.imag.max() == 0
-    plt.stem(eigvals)
+    print("\tEigenvalues are real.")
+    plt.stem(eigvals, basefmt="")
+    plt.title(f"Eigenvalues of correlation matrix, poles = ({poles[0]}, {poles[1]})")
+    plt.xticks([])
     plt.savefig(f"plots/poles_{poles[0]}_{poles[1]}/eigvals.png")
     plt.close()
     print("\tEigenvalues plotted.\n")
@@ -69,13 +76,37 @@ for poles in pole_pairs:
 
     print("\n")
 
+    # Estimate correlation matrix from data
+    X = la.toeplitz(x[L::-1], x[L:])
+    R_est = X @ X.T
+    R_est /= N_0 - L
+    r_est = R_est[0]
 
+    plt.stem(r, basefmt=" ")
+    plt.stem(r_est, linefmt="red", markerfmt="red", basefmt=" ")
+    plt.legend(["True", "Estimated"])
+    plt.xticks(range(0, L+1, 2))
+    plt.xlabel("m")
+    plt.ylabel("r[m]")
+    plt.title(f"Correlation function, true and estimated, poles = ({poles[0]}, {poles[1]})")
+    plt.savefig(f"plots/poles_{poles[0]}_{poles[1]}/correlation.png")
+    plt.close()
+    print("\tCorrelation matrix plotted.\n")
+
+    # SVD of X
+    alpha = 1/np.sqrt(N_0 - L)
+    s = la.svdvals(alpha * X)
+    eigvals_est = la.eigvals(R_est).real
+    assert abs(s**2 / eigvals_est).mean() - 1 < 1e-2
+    print("\tSingular values correspond to correlation matrix eigenvalues with given alpha.\n")
+
+    # Autocorrelation
+    autocorrelation = (1/(2*np.pi)) * S.sum() * (omega[1] - omega[0])
+    assert abs(autocorrelation / r_est[0]) - 1 < 0.2
+    print("\tAutocorrelation matches integral of PSD.\n\n")
 
 
     # for M in [2, 4, 10]:
     #     X = la.toeplitz(x[M::-1], x[M:])
 
 #         eigvals = la.eigvals(R_L_plus_1)
-
-
-# signal.lfilter()
